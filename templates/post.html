@@ -53,7 +53,7 @@
                     <ul class="commentList">
                         <li>
                             <div class="commenterImage">
-                                <img src="{{ post.author.email | gravatar }}"/>
+                                <img src="{{ comment.author.email | gravatar }}"/>
                             </div>
                             <div class="commentText">
                                 {{comment.comments|safe}}

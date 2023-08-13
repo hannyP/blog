@@ -1,6 +1,6 @@
 from functools import wraps
 from flask import abort
-from flask import Flask, render_template, redirect, url_for, flash
+from flask import Flask, render_template, redirect, url_for, flash,request
 from flask_bootstrap import Bootstrap
 from flask_ckeditor import CKEditor
 from datetime import date
@@ -12,10 +12,13 @@ from forms import CreatePostForm, RegisterForm,LoginForm,CommentForm
 from flask_gravatar import Gravatar
 # from sqlalchemy import Table, Column, Integer, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
+import os
+import smtplib
+from email.message import EmailMessage
 
 Base = declarative_base()
 app = Flask(__name__)
-app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
+app.config['SECRET_KEY'] = os.environ.get("KEY")
 ckeditor = CKEditor(app)
 Bootstrap(app)
 gravatar = Gravatar(app,
@@ -26,8 +29,26 @@ gravatar = Gravatar(app,
                     force_lower=False,
                     use_ssl=False,
                     base_url=None)
+#*******************************************************************************************************************************************************
+
+mail = os.environ.get("MAIL")
+msg = EmailMessage()
+PASS = os.environ.get("PASS")
+# ***********MESSAGE***************
+
+def send_message(name,email,phone,message):
+    msg.set_content(f" NAME:{name}\n PHONE: {phone}\n MAIL:{email}\n MESSAGE: {message}")
+    msg['Subject'] = "💻 MY BLOG"
+    msg['From'] = mail
+    msg['To'] = mail
+    s = smtplib.SMTP("smtp.gmail.com")
+    s.starttls()
+    s.login(user=mail, password=PASS)
+    s.send_message(msg)
+    s.quit()
+
 ##CONNECT TO DB
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///og.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("URI")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -138,6 +159,7 @@ def show_post(post_id):
     if form.validate_on_submit():
         if not current_user.is_authenticated:
             flash("please log in to comment on post")
+            return redirect(url_for('login'))
         comment = Comments(comments=form.comment.data,
                            author = current_user,
                            parent_post=requested_post )
@@ -151,9 +173,16 @@ def about():
     return render_template("about.html",log_in=current_user)
 
 
-@app.route("/contact")
+@app.route("/contact",methods=["POST","GET"])
 def contact():
-    return render_template("contact.html",log_in=current_user)
+    if request.method == "POST":
+        name = request.form["name"]
+        email = request.form["email"]
+        phone = request.form["phone"]
+        message = request.form["message"]
+        send_message(name,email,phone,message)
+        return render_template("contact.html",ans=True)
+    return render_template("contact.html",ans=False)
 
 
 @app.route("/new-post",methods=["POST","GET"])
@@ -175,7 +204,7 @@ def add_new_post():
     return render_template("make-post.html", form=form,log_in=current_user)
 
 @admin_only
-@app.route("/edit-post/<int:post_id>")
+@app.route("/edit-post/<int:post_id>",methods=["POST","GET"])
 def edit_post(post_id):
     post = BlogPost.query.get(post_id)
     edit_form = CreatePostForm(
@@ -189,7 +218,6 @@ def edit_post(post_id):
         post.title = edit_form.title.data
         post.subtitle = edit_form.subtitle.data
         post.img_url = edit_form.img_url.data
-        post.author = edit_form.author.data
         post.body = edit_form.body.data
         db.session.commit()
         return redirect(url_for("show_post", post_id=post.id))
